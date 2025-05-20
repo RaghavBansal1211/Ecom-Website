@@ -109,7 +109,7 @@ const Home = () => {
             products.map(product => (
               <div key={product._id} className="border p-4 rounded shadow hover:shadow-md transition flex flex-col justify-between">
                 <img
-                  src={`http://localhost:8000${product.imageUrl}`}
+                  src={`http://localhost:8000${product.imageUrl[0]}`}
                   alt={product.name}
                   className="w-full h-48 object-cover mb-4"
                 />

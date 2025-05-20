@@ -6,6 +6,8 @@ import { useForm } from 'react-hook-form';
 const UpdateProduct = () => {
   const [products, setProducts] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [existingImages, setExistingImages] = useState([]);
+  const [deletedImages, setDeletedImages] = useState([]);
 
   const {
     register,
@@ -15,7 +17,6 @@ const UpdateProduct = () => {
     formState: { errors },
   } = useForm();
 
-  // Fetch all products
   const fetchProducts = async () => {
     try {
       const res = await axios.get('http://localhost:8000/products/fetchAll', {
@@ -33,24 +34,34 @@ const UpdateProduct = () => {
     fetchProducts();
   }, []);
 
-  // Handle edit click
   const handleEdit = (product) => {
     setEditingId(product._id);
     setValue('name', product.name);
     setValue('description', product.description);
     setValue('price', product.price);
     setValue('stock', product.stock);
+    setExistingImages(product.imageUrl || []);
+    setDeletedImages([]);
   };
 
-  // Submit updated product
   const onSubmit = async (data) => {
+    const totalImages = existingImages.length + (data.image?.length || 0);
+    if (totalImages > 5) {
+      toast.error('You can only upload a maximum of 5 images.');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('name', data.name);
     formData.append('description', data.description);
     formData.append('price', data.price);
     formData.append('stock', data.stock);
-    if (data.image?.[0]) {
-      formData.append('image', data.image[0]);
+    formData.append('deletedImages', JSON.stringify(deletedImages));
+
+    if (data.image?.length) {
+      for (const file of data.image) {
+        formData.append('images', file);
+      }
     }
 
     try {
@@ -124,17 +135,42 @@ const UpdateProduct = () => {
                   {errors.stock && <p className="text-red-500 text-sm">{errors.stock.message}</p>}
                 </div>
 
+                {/* Show existing images with delete option */}
+                <div className="flex flex-wrap gap-2">
+                  {existingImages.map((img, index) => (
+                    <div key={index} className="relative w-24 h-24">
+                      <img
+                        src={`http://localhost:8000${img}`}
+                        alt="product"
+                        className="w-full h-full object-cover rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeletedImages((prev) => [...prev, img]);
+                          setExistingImages((prev) => prev.filter((url) => url !== img));
+                        }}
+                        className="absolute top-0 right-0 bg-red-600 text-white rounded-full px-1 text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Upload new images */}
                 <div>
                   <input
-                      type="file"
-                      {...register('image')}
-                      className="block w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-blue-600 file:text-white
-                        hover:file:bg-blue-700 transition"
-                    />
+                    type="file"
+                    multiple
+                    {...register('image')}
+                    className="block w-full text-sm text-gray-500
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-blue-600 file:text-white
+                      hover:file:bg-blue-700 transition"
+                  />
                 </div>
 
                 <button
@@ -147,11 +183,13 @@ const UpdateProduct = () => {
             </div>
           ) : (
             <div key={product._id} className="border p-4 rounded shadow-lg bg-white">
-              <img
-                src={`http://localhost:8000${product.imageUrl}`}
-                alt={product.name}
-                className="w-full h-48 object-cover rounded mb-4"
-              />
+              {product.imageUrl?.[0] && (
+                <img
+                  src={`http://localhost:8000${product.imageUrl[0]}`}
+                  alt={product.name}
+                  className="w-full h-48 object-cover rounded mb-4"
+                />
+              )}
               <h3 className="text-xl font-semibold mb-2">{product.name}</h3>
               <p className="text-gray-600 text-sm mb-2">{product.description}</p>
               <p className="font-semibold text-lg mb-2">₹{product.price}</p>

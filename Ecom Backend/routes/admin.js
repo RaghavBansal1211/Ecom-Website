@@ -6,8 +6,8 @@ const upload = require("../middleware/upload");
 
 
 
-router.post("/createProduct",upload.single('image'),handleCreateProduct);
-router.put("/updateProduct/:id",upload.single('image'),handleUpdateProduct);  
+router.post("/createProduct",upload.array('images',5),handleCreateProduct);
+router.put("/updateProduct/:id",upload.array('images',5),handleUpdateProduct);  
 router.get("/orders/fetchAll",handleGetAllOrders);
 router.put("/orders/update/:id",handleUpdateOrderStatus);
 

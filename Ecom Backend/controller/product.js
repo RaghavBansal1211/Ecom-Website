@@ -33,21 +33,30 @@ const handleGetProduct = async (req, res) => {
 const handleCreateProduct = async (req, res) => {
   try {
     const { name, description, price, stock } = req.body;
-    const imageFile = req.file;
-    if (!imageFile) return res.status(400).json({ message: 'Image is required' });
 
-    const imageUrl = `/uploads/${imageFile.filename}`;
-
+    // Validate required fields
     if (!name || !description || !price || !stock) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
-    
+
+    const imageFiles = req.files;
+
+    if (!imageFiles || imageFiles.length === 0) {
+      return res.status(400).json({ message: 'At least one image is required' });
+    }
+
+    if (imageFiles.length > 5) {
+      return res.status(400).json({ message: 'You can upload a maximum of 5 images' });
+    }
+
+    const imageUrls = imageFiles.map(file => `/uploads/${file.filename}`);
+
     const product = await Product.create({
       name,
       description,
       price,
       stock,
-      imageUrl
+      imageUrl: imageUrls, 
     });
 
     res.status(201).json({ message: 'Product created', product });
@@ -60,48 +69,56 @@ const handleCreateProduct = async (req, res) => {
 
 const handleUpdateProduct = async (req, res) => {
   try {
-    const { name, description, price, stock } = req.body;
+    const { name, description, price, stock, deletedImages } = req.body;
     const productId = req.params.id;
-    const imageFile = req.file;
 
-    // Get the existing product
     const existingProduct = await Product.findById(productId);
     if (!existingProduct) return res.status(404).json({ message: 'Product not found' });
 
-    // Delete old image if new image is uploaded
-    if (imageFile) {
-      const oldImagePath = path.join(__dirname, '..', existingProduct.imageUrl);
-      fs.unlink(oldImagePath, (err) => {
-        if (err) {
-          console.error('Failed to delete old image:', err.message);
-        }
+    let updatedImageUrls = existingProduct.imageUrl;
+
+    // Parse deletedImages if it's a JSON string
+    const deleted = deletedImages ? JSON.parse(deletedImages) : [];
+
+    // Delete specified images from disk and filter them out
+    if (deleted.length > 0) {
+      deleted.forEach((img) => {
+        const imgPath = path.join(__dirname, '..', img);
+        fs.unlink(imgPath, (err) => {
+          if (err) console.error('Failed to delete image:', err.message);
+        });
       });
+
+      updatedImageUrls = updatedImageUrls.filter((url) => !deleted.includes(url));
     }
 
-    // Build update object
-    const updateData = {
-      name,
-      description,
-      price,
-      stock,
-    };
-
-    if (imageFile) {
-      updateData.imageUrl = `/uploads/${imageFile.filename}`;
+    // Append new uploaded images
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map((file) => `/uploads/${file.filename}`);
+      updatedImageUrls = [...updatedImageUrls, ...newImages];
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(productId, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const updatedProduct = await Product.findByIdAndUpdate(
+      productId,
+      {
+        name,
+        description,
+        price,
+        stock,
+        imageUrl: updatedImageUrls,
+      },
+      { new: true, runValidators: true }
+    );
 
     res.status(200).json({ message: 'Product updated', product: updatedProduct });
-
   } catch (err) {
     console.error('Error updating product:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+module.exports = { handleUpdateProduct };
+
 
 
 const handleCreateOrUpdateReview = async (req, res) => {

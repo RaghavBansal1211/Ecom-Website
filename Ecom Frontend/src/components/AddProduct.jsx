@@ -11,29 +11,38 @@ const AddProduct = () => {
     formState: { errors },
   } = useForm();
 
-  const onSubmit = async (data) => {
-    const formData = new FormData();
-    formData.append('name', data.name);
-    formData.append('description', data.description);
-    formData.append('price', data.price);
-    formData.append('stock', data.stock);
-    formData.append('image', data.image[0]);
+ const onSubmit = async (data) => {
+  if (data.image.length > 5) {
+    toast.error('You can only upload up to 5 images');
+    return;
+  }
 
-    try {
-      await axios.post('http://localhost:8000/admin/createProduct', formData, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+  const formData = new FormData();
+  formData.append('name', data.name);
+  formData.append('description', data.description);
+  formData.append('price', data.price);
+  formData.append('stock', data.stock);
 
-      toast.success('Product added successfully ✅');
-      reset();
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to add product');
-    }
-  };
+  for (let i = 0; i < data.image.length; i++) {
+    formData.append('images', data.image[i]);
+  }
+
+  try {
+    await axios.post('http://localhost:8000/admin/createProduct', formData, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    toast.success('Product added successfully ✅');
+    reset();
+  } catch (error) {
+    console.error(error);
+    toast.error('Failed to add product');
+  }
+};
+
 
   return (
     <div className="flex items-center justify-center bg-gray-50 px-4 py-8 mt-10">
@@ -81,6 +90,7 @@ const AddProduct = () => {
           <div>
             <input
               type="file"
+              multiple
               {...register('image', { required: 'Product image is required' })}
               className="w-full rounded file:mr-3 file:py-1 file:px-4 file:border-0 file:bg-blue-600 file:text-white file:rounded hover:file:bg-blue-700 transition"
             />

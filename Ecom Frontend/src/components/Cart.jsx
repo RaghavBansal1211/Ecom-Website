@@ -63,7 +63,8 @@ const Cart = () => {
     }
 
     const orderPayload = {
-      items: cart.map(({ name, quantity, price }) => ({
+      items: cart.map(({_id, name, quantity, price }) => ({
+        productId:_id,
         name,
         quantity,
         price,
@@ -73,6 +74,7 @@ const Cart = () => {
 
     try {
       const token = localStorage.getItem('token');
+      console.log(orderPayload);
       const res = await axios.post(
         'http://localhost:8000/customer/placeOrder',
         orderPayload,

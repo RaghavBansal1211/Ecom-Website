@@ -1,77 +1,93 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 
 const ProductView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [product, setProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
-  const [hover, setHover] = useState(0);
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
 
   const isLoggedIn = Boolean(localStorage.getItem('token'));
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm();
-
-  const fetchProduct = async () => {
-    try {
-      const res = await axios.get(`http://localhost:8000/products/${id}`);
-      setProduct(res.data);
-    } catch (err) {
-      toast.error('Failed to load product');
-    }
-  };
-
-  const fetchReviews = async () => {
-    try {
-      const res = await axios.get(`http://localhost:8000/products/review/${id}`);
-      console.log(res);
-      setReviews(res.data || []);
-    } catch (err) {
-      toast.error('Failed to load reviews');
-    }
-  };
-
   useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const res = await axios.get(`http://localhost:8000/products/${id}`);
+        setProduct(res.data);
+        setCurrentImgIndex(0); // reset slider index on product change
+      } catch (err) {
+        toast.error('Failed to load product');
+      }
+    };
+
+    const fetchReviews = async () => {
+      try {
+        const res = await axios.get(`http://localhost:8000/products/review/${id}`);
+        setReviews(res.data || []);
+      } catch (err) {
+        toast.error('Failed to load reviews');
+      }
+    };
+
     fetchProduct();
     fetchReviews();
-    register('rating', { required: 'Rating is required' }); // manual rating register
-  }, [id, register]);
-
-  const onSubmit = async (data) => {
-    try {
-      await axios.post(
-        `http://localhost:8000/customer/review/${id}`,
-        data,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
-      toast.success('Review submitted ✅');
-      reset();
-      fetchReviews();
-    } catch (err) {
-      toast.error('Failed to submit review ❌');
-    }
-  };
+  }, [id]);
 
   const averageRating =
     reviews.length > 0
-      ? (
-          reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length
-        ).toFixed(1)
+      ? (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length).toFixed(1)
       : null;
+
+  const handleAddToCart = () => {
+    if (!isLoggedIn) {
+      toast.error('Please login to add items to your cart');
+      return;
+    }
+
+    let existingCart = JSON.parse(localStorage.getItem('cart')) || [];
+    const existingProductIndex = existingCart.findIndex(item => item._id === product._id);
+
+    if (existingProductIndex !== -1) {
+      if (existingCart[existingProductIndex].quantity < product.stock) {
+        existingCart[existingProductIndex].quantity += 1;
+      } else {
+        toast.error(`Only ${product.stock} in stock`);
+        return;
+      }
+    } else {
+      if (product.stock > 0) {
+        existingCart.push({ ...product, quantity: 1 });
+      } else {
+        toast.error('Product out of stock');
+        return;
+      }
+    }
+
+    localStorage.setItem('cart', JSON.stringify(existingCart));
+    toast.success(`${product.name} added to cart`);
+  };
+
+  const images = product?.imageUrl && Array.isArray(product.imageUrl)
+    ? product.imageUrl
+    : product?.imageUrl
+    ? [product.imageUrl]
+    : [];
+
+  const prevImage = () => {
+    setCurrentImgIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+  };
+
+  const nextImage = () => {
+    setCurrentImgIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  };
+
+  const goToImage = (index) => {
+    setCurrentImgIndex(index);
+  };
 
   if (!product) {
     return (
@@ -80,36 +96,6 @@ const ProductView = () => {
       </div>
     );
   }
-
-  const handleAddToCart = (product) => {
-  if (!isLoggedIn) {
-    toast.error('Please login to add items to your cart');
-    return;
-  }
-
-  let existingCart = JSON.parse(localStorage.getItem('cart')) || [];
-  const existingProductIndex = existingCart.findIndex(item => item._id === product._id);
-
-  if (existingProductIndex !== -1) {
-    if (existingCart[existingProductIndex].quantity < product.stock) {
-      existingCart[existingProductIndex].quantity += 1;
-    } else {
-      toast.error(`Only ${product.stock} in stock`);
-      return;
-    }
-  } else {
-    if (product.stock > 0) {
-      existingCart.push({ ...product, quantity: 1 });
-    } else {
-      toast.error('Product out of stock');
-      return;
-    }
-  }
-
-  localStorage.setItem('cart', JSON.stringify(existingCart));
-  toast.success(`${product.name} added to cart`);
-};
-
 
   return (
     <div className="min-h-screen px-6 md:px-16 lg:px-28 py-10 bg-gray-50">
@@ -121,11 +107,107 @@ const ProductView = () => {
       </button>
 
       <div className="bg-white rounded shadow-md p-6 grid grid-cols-1 md:grid-cols-2 gap-10">
-        <img
-          src={`http://localhost:8000${product.imageUrl}`}
-          alt={product.name}
-          className="w-full h-[400px] object-cover rounded"
-        />
+        <div
+          className="relative max-w-full"
+          style={{ maxWidth: '500px' }}
+        >
+          {/* Image */}
+          <img
+            src={`http://localhost:8000${images[currentImgIndex]}`}
+            alt={product.name}
+            style={{
+              width: '100%',
+              height: '400px',
+              objectFit: 'contain', // full image visible, no cropping
+              display: 'block',
+              margin: '0 auto',
+            }}
+          />
+
+          {/* Prev Button */}
+
+{images.length > 1 && (
+  <>
+    <button
+      onClick={prevImage}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: '8px',
+        transform: 'translateY(-50%)',
+        backgroundColor: 'white',
+        borderRadius: '50%',
+        width: '30px',
+        height: '30px',
+        fontWeight: 'bold',
+        fontSize: '24px',
+        border: '1px solid #ddd',
+        cursor: 'pointer',
+        userSelect: 'none',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        boxShadow: '0 0 5px rgba(0,0,0,0.1)',
+        lineHeight: '1',
+        paddingBottom: '2px',
+        paddingRight: '1px'
+      }}
+      aria-label="Previous Image"
+    >
+      &lt;
+    </button>
+    <button
+      onClick={nextImage}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        right: '8px',
+        transform: 'translateY(-50%)',
+        backgroundColor: 'white',
+        borderRadius: '50%',
+        width: '30px',
+        height: '30px',
+        fontWeight: 'bold',
+        fontSize: '24px',
+        border: '1px solid #ddd',
+        cursor: 'pointer',
+        userSelect: 'none',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        boxShadow: '0 0 5px rgba(0,0,0,0.1)',
+        lineHeight: '1',
+        paddingBottom: '2px'
+      }}
+      aria-label="Next Image"
+    >
+      &gt;
+    </button>
+  </>
+)}
+
+          {/* Navigation Dots */}
+          {images.length > 1 && (
+            <div className="flex justify-center gap-2 mt-4">
+              {images.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => goToImage(index)}
+                  style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: currentImgIndex === index ? '#2563eb' : '#d1d5db',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                  aria-label={`Go to image ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="space-y-4">
           <h1 className="text-3xl font-bold text-gray-800">{product.name}</h1>
@@ -144,15 +226,15 @@ const ProductView = () => {
 
           <button
             disabled={product.stock === 0}
-            onClick={() => handleAddToCart(product)}
+            onClick={handleAddToCart}
             className={`${
-                product.stock === 0
+              product.stock === 0
                 ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-green-600 hover:bg-green-700'
             } text-white px-6 py-2 rounded transition`}
-            >
+          >
             {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
-            </button>
+          </button>
         </div>
       </div>
 
@@ -165,7 +247,7 @@ const ProductView = () => {
             {reviews.map((review, i) => (
               <div key={i} className="border-b pb-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">{review.userId.name || 'Anonymous'}</span>
+                  <span className="font-semibold">{review.userId?.name || 'Anonymous'}</span>
                   <span className="text-yellow-500">⭐ {review.rating}</span>
                 </div>
                 <p className="text-gray-700">{review.comment}</p>
@@ -176,55 +258,6 @@ const ProductView = () => {
           <p className="text-gray-500">No reviews yet for this product.</p>
         )}
       </div>
-
-      {/* Add Review Form */}
-      {/* Add Review Form */}
-        {isLoggedIn && (
-        <div className="mt-12 bg-white rounded shadow-md p-6 w-full max-w-3xl">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">Leave a Review</h3>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div>
-                <label className="block mb-1 font-medium">Your Rating</label>
-                <div className="flex gap-1 text-2xl">
-                {[1, 2, 3, 4, 5].map((star) => (
-                    <span
-                    key={star}
-                    className={`cursor-pointer transition ${
-                        hover >= star || watch('rating') >= star
-                        ? 'text-yellow-400'
-                        : 'text-gray-300'
-                    }`}
-                    onClick={() => setValue('rating', star)}
-                    onMouseEnter={() => setHover(star)}
-                    onMouseLeave={() => setHover(0)}
-                    >
-                    ★
-                    </span>
-                ))}
-                </div>
-                {errors.rating && <p className="text-red-500 text-sm">{errors.rating.message}</p>}
-            </div>
-
-            <div>
-                <label className="block mb-1 font-medium">Comment</label>
-                <textarea
-                {...register('comment', { required: 'Comment is required' })}
-                className="border p-2 w-full rounded resize-none"
-                rows={4}
-                />
-                {errors.comment && <p className="text-red-500 text-sm">{errors.comment.message}</p>}
-            </div>
-
-            <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
-            >
-                Submit Review
-            </button>
-            </form>
-        </div>
-        )}
-
     </div>
   );
 };
